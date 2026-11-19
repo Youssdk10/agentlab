@@ -39,3 +39,40 @@ def list_orders(connection, customer_id):
             for r in rows
         ]
     }
+
+def add_note(connection, order_id, text, today):
+    exists = connection.execute(
+        "SELECT 1 FROM orders WHERE id = ?", (order_id,)
+    ).fetchone()
+    if exists is None:
+        return {"error": "order_not_found", "message": f"Order {order_id} does not exist."}
+
+    cursor = connection.execute(
+        "INSERT INTO notes (order_id, text, created_at) VALUES (?, ?, ?)",
+        (order_id, text, today),
+    )
+    connection.commit()
+    return {"note": {"id": cursor.lastrowid, "order_id": order_id, "text": text}}
+
+def update_address(connection, order_id, new_address):
+    row = connection.execute(
+        "SELECT status FROM orders WHERE id = ?", (order_id,)
+    ).fetchone()
+    if row is None:
+        return {"error": "order_not_found", "message": f"Order {order_id} does not exist."}
+
+    address = new_address.strip()
+    if not address or len(address) > 200:
+        return {"error": "invalid_address", "message": "Address must be 1 to 200 characters."}
+
+    if row[0] != "placed":
+        return {
+            "error": "address_change_not_allowed",
+            "message": f"Address can only be changed while the order is placed (status is {row[0]}).",
+        }
+
+    connection.execute(
+        "UPDATE orders SET ship_address = ? WHERE id = ?", (address, order_id)
+    )
+    connection.commit()
+    return get_order(connection, order_id)
