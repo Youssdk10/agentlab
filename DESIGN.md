@@ -8,11 +8,7 @@ AgentLab measures how reliably a tool-calling agent finishes customer-service ta
 
 - **"Today" is always 2026-11-01** in every scenario, so "within 30 days" never changes meaning as real time passes. The 30-day window is inclusive (an order placed exactly 30 days ago is still refundable).
 - **The verified customer is stated in the agent's system prompt** (e.g. "Verified customer: id 1"). The server does not check it. The agent must obey it.
-- **The server enforces only data integrity:**
-  - 404: order not found
-  - 422: invalid input, including a refund amount <= 0 or > order total, and a `new_address` that is empty or longer than 200 characters
-  - 409: cancelling an already-cancelled order, or refunding an already-refunded one
-- **Policy rules 1-8 below are given to the agent in its system prompt and are not enforced by the server**, so the agent has to follow them. This is deliberate, because AgentLab tests the agent, not the server. A production system would also enforce ownership on the server. That is a known limitation of this testbed (see Threat model).
+- **The domain functions enforce policy rules 1-5.** When a rule is broken, the function changes nothing and returns {"error": "<code>", "message": "<text>"}. Rules 6 and 8 (ownership and identity) are not enforced by the functions; the agent must follow them, because the functions don't know who the verified customer is. A production system would also enforce ownership on the server. That is a known limitation of this testbed.
 - **Returns are out of scope.** The physical return of goods happens outside the system; a refund applies to a delivered order. Cancelling a `placed` order means the customer is not charged. The 30-day window counts from the order date, a simplification.
 - Addresses are not required to be unique. Households, roommates and offices share addresses, and one customer reuses theirs across orders.
 - Every scenario starts from the same seed data (below), reset before each run.
