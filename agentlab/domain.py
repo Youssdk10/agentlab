@@ -25,3 +25,17 @@ def get_order(connection, order_id):
             "items": [{"sku": s, "qty": q, "price": p} for s, q, p in items],
         }
     }
+
+def list_orders(connection, customer_id):
+    rows = connection.execute(
+        "SELECT id, status, placed_at, total FROM orders "
+        "WHERE customer_id = ? ORDER BY placed_at DESC, id DESC",
+        (customer_id,),
+    ).fetchall()
+
+    return {
+        "orders": [
+            {"id": r[0], "status": r[1], "placed_at": r[2], "total": r[3]}
+            for r in rows
+        ]
+    }
