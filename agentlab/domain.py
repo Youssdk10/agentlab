@@ -76,3 +76,22 @@ def update_address(connection, order_id, new_address):
     )
     connection.commit()
     return get_order(connection, order_id)
+
+def cancel_order(connection, order_id):
+    row = connection.execute(
+        "SELECT status FROM orders WHERE id = ?", (order_id,)
+    ).fetchone()
+    if row is None:
+        return {"error": "order_not_found", "message": f"Order {order_id} does not exist."}
+    if row[0] == "cancelled":
+        return {"error": "already_cancelled", "message": f"Order {order_id} is already cancelled."}
+    if row[0] != "placed":
+        return {
+            "error": "not_cancellable",
+            "message": f"Order {order_id} cannot be cancelled (status is {row[0]}).",
+        }
+    connection.execute(
+        "UPDATE orders SET status = ? WHERE id = ?", ("cancelled", order_id)
+    )
+    connection.commit()
+    return get_order(connection, order_id)

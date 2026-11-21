@@ -1,5 +1,5 @@
 from agentlab.db import get_connection, reset
-from agentlab.domain import get_order, list_orders, add_note, update_address
+from agentlab.domain import get_order, list_orders, add_note, update_address, cancel_order
 
 def make_db():
     conn = get_connection(":memory:")
@@ -93,3 +93,37 @@ def test_update_address_rejects_empty_and_too_long():
     assert update_address(conn, 101, "x" * 201)["error"] == "invalid_address"
     stored = conn.execute("SELECT ship_address FROM orders WHERE id = ?", (101,)).fetchone()[0]
     assert stored == "1 Main Street, Austin, TX"
+
+def test_cancel_placed_order():
+    conn = make_db()
+    result = cancel_order(conn, 101)
+    assert result["order"]["status"] == "cancelled"
+    stored = conn.execute("SELECT status FROM orders WHERE id = ?", (101,)).fetchone()[0]
+    assert stored == "cancelled"
+
+
+def test_cancel_refused_when_shipped():
+    conn = make_db()
+    result = cancel_order(conn, 102)
+    assert result["error"] == "not_cancellable"
+    stored = conn.execute("SELECT status FROM orders WHERE id = ?", (102,)).fetchone()[0]
+    assert stored == "shipped"
+
+
+def test_cancel_refused_when_delivered():
+    conn = make_db()
+    result = cancel_order(conn, 103)
+    assert result["error"] == "not_cancellable"
+    stored = conn.execute("SELECT status FROM orders WHERE id = ?", (103,)).fetchone()[0]
+    assert stored == "delivered"
+
+
+def test_cancel_already_cancelled():
+    conn = make_db()
+    result = cancel_order(conn, 108)
+    assert result["error"] == "already_cancelled"
+
+
+def test_cancel_missing_order():
+    conn = make_db()
+    assert cancel_order(conn, 999)["error"] == "order_not_found"
