@@ -1,5 +1,5 @@
 from agentlab.db import get_connection, reset
-from agentlab.domain import get_order, list_orders, add_note, update_address, cancel_order
+from agentlab.domain import get_order, list_orders, add_note, update_address, cancel_order, refund_order
 
 def make_db():
     conn = get_connection(":memory:")
@@ -127,3 +127,76 @@ def test_cancel_already_cancelled():
 def test_cancel_missing_order():
     conn = make_db()
     assert cancel_order(conn, 999)["error"] == "order_not_found"
+
+def stored_refund(conn, order_id):
+    return conn.execute(
+        "SELECT status, refund_amount FROM orders WHERE id = ?", (order_id,)
+    ).fetchone()
+
+
+def test_refund_full_on_delivered_order():
+    conn = make_db()
+    result = refund_order(conn, 103, 80.00, "2026-11-01")
+    assert result["order"]["status"] == "refunded"
+    assert result["order"]["refund_amount"] == 80.00
+    assert stored_refund(conn, 103) == ("refunded", 80.00)
+
+
+def test_refund_partial_amount():
+    conn = make_db()
+    result = refund_order(conn, 103, 20.00, "2026-11-01")
+    assert result["order"]["status"] == "refunded"
+    assert result["order"]["refund_amount"] == 20.00
+
+
+def test_refund_refused_when_too_old():
+    conn = make_db()
+    result = refund_order(conn, 104, 50.00, "2026-11-01")
+    assert result["error"] == "refund_not_allowed"
+    assert stored_refund(conn, 104) == ("delivered", None)
+
+
+def test_refund_allowed_on_day_30():
+    conn = make_db()
+    conn.execute("UPDATE orders SET placed_at = ? WHERE id = ?", ("2026-10-02", 103))
+    conn.commit()
+    result = refund_order(conn, 103, 80.00, "2026-11-01")
+    assert "order" in result
+
+
+def test_refund_refused_on_day_31():
+    conn = make_db()
+    conn.execute("UPDATE orders SET placed_at = ? WHERE id = ?", ("2026-10-01", 103))
+    conn.commit()
+    result = refund_order(conn, 103, 80.00, "2026-11-01")
+    assert result["error"] == "refund_not_allowed"
+    assert stored_refund(conn, 103) == ("delivered", None)
+
+
+def test_refund_refused_when_not_delivered():
+    conn = make_db()
+    for order_id, status in [(101, "placed"), (102, "shipped"), (108, "cancelled")]:
+        result = refund_order(conn, order_id, 10.00, "2026-11-01")
+        assert result["error"] == "refund_not_allowed"
+        assert stored_refund(conn, order_id) == (status, None)
+
+
+def test_refund_twice_refused():
+    conn = make_db()
+    refund_order(conn, 103, 80.00, "2026-11-01")
+    result = refund_order(conn, 103, 10.00, "2026-11-01")
+    assert result["error"] == "already_refunded"
+    assert stored_refund(conn, 103) == ("refunded", 80.00)
+
+
+def test_refund_invalid_amounts():
+    conn = make_db()
+    for amount in [0, -5, 80.01]:
+        result = refund_order(conn, 103, amount, "2026-11-01")
+        assert result["error"] == "invalid_amount"
+    assert stored_refund(conn, 103) == ("delivered", None)
+
+
+def test_refund_missing_order():
+    conn = make_db()
+    assert refund_order(conn, 999, 10.00, "2026-11-01")["error"] == "order_not_found"

@@ -1,3 +1,5 @@
+from datetime import date
+
 def get_order(connection, order_id):
     row = connection.execute(
         "SELECT id, customer_id, status, placed_at, total, ship_address, refund_amount "
@@ -93,5 +95,28 @@ def cancel_order(connection, order_id):
     connection.execute(
         "UPDATE orders SET status = ? WHERE id = ?", ("cancelled", order_id)
     )
+    connection.commit()
+    return get_order(connection, order_id)
+
+def refund_order(connection, order_id, amount, today):
+    row = connection.execute(
+        "SELECT status, placed_at, total FROM orders WHERE id = ?", (order_id,)
+    ).fetchone()
+    if row is None:
+        return {"error": "order_not_found", "message": f"order {order_id} is not found"} 
+    if row[0] == "refunded":
+        return {"error": "already_refunded", "message": f"order {order_id} already refunded"} 
+    if row[0] != "delivered":
+        return {"error": "refund_not_allowed", "message": f"order {order_id} cannot be refunded"} 
+    
+    days = (date.fromisoformat(today) - date.fromisoformat(row[1])).days
+    if days > 30:
+        return {"error": "refund_not_allowed", "message": f"order {order_id} cannot be refunded"} 
+    if amount <= 0 or amount > row[2]: 
+        return {"error": "invalid_amount", "message" : f"Refund must be above 0 and at most {row[2]}."}
+    # 7. UPDATE orders SET status = ?, refund_amount = ? WHERE id = ?   then commit
+    connection.execute(
+            "UPDATE orders SET status = ?, refund_amount = ? WHERE id = ?", ("refunded", amount, order_id)
+        )
     connection.commit()
     return get_order(connection, order_id)
