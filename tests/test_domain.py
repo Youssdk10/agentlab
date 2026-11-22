@@ -1,5 +1,13 @@
 from agentlab.db import get_connection, reset
-from agentlab.domain import get_order, list_orders, add_note, update_address, cancel_order, refund_order
+from agentlab.domain import (
+    add_note,
+    cancel_order,
+    get_order,
+    list_orders,
+    refund_order,
+    update_address,
+)
+
 
 def make_db():
     conn = get_connection(":memory:")

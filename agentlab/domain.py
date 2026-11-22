@@ -1,5 +1,6 @@
 from datetime import date
 
+
 def get_order(connection, order_id):
     row = connection.execute(
         "SELECT id, customer_id, status, placed_at, total, ship_address, refund_amount "
